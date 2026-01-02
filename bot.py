@@ -228,10 +228,6 @@ async def setup_rules(interaction: discord.Interaction, channel: discord.TextCha
         inline=False
     )
 
-    embed.set_footer(
-        text="CS2IL Community • נוצר ב-2025",
-        icon_url=interaction.guild.icon.url if interaction.guild.icon else None
-    )
 
     if interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
