@@ -1,7 +1,10 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ui import Button, View, Select
 import os
+import aiohttp
+import asyncio
+from datetime import datetime
 
 # Bot setup
 intents = discord.Intents.default()
@@ -9,23 +12,6 @@ intents.message_content = True
 intents.members = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
-
-ALLOWED_USER_IDS = [
-    1446497991572717679, 1446498166525661244, 1456602743870590996,
-    1446494647018061844, 1446498334951870586
-]
-
-def is_allowed_user():
-    """Check if the user is in the allowed list."""
-    async def predicate(interaction: discord.Interaction) -> bool:
-        if interaction.user.id in ALLOWED_USER_IDS:
-            return True
-        await interaction.response.send_message(
-            "❌ You are not authorized to use this command.", ephemeral=True
-        )
-        return False
-    return commands.check(predicate)
-
 
 # Rules - exact text from server
 RULES = [
@@ -47,6 +33,10 @@ RULES = [
 
 RULES_TITLE = "ברוכים הבאים לשרת סיאס הגדול בישראל"
 
+# Instagram settings
+INSTAGRAM_USERNAME = "cs2israel"  # CS2IL Instagram account
+INSTAGRAM_CHECK_CHANNEL_ID = 1458113065634762907  # Social media updates channel
+last_post_id = None  # Track the last post we've seen
 
 
 class RoleSelectionView(View):
@@ -68,9 +58,15 @@ class RoleSelect(Select):
             ),
             discord.SelectOption(
                 label="עדכוני סיאס",
-                description="CS2 קבל התראות על עדכונים של ",
+                description="קבל התראות על עדכונים של CS2",
                 emoji="🎮",
                 value="1446503623021559909"
+            ),
+            discord.SelectOption(
+                label="הגרלה",
+                description="קבל התראות על הגרלות",
+                emoji="🎁",
+                value="1453758256580263986"
             )
         ]
 
@@ -121,7 +117,6 @@ async def on_ready():
 
 
 @bot.tree.command(name="rules", description="הצג את חוקי השרת")
-@is_allowed_user()
 async def rules(interaction: discord.Interaction):
     """Display server rules in a beautiful embed"""
 
@@ -131,26 +126,21 @@ async def rules(interaction: discord.Interaction):
         color=discord.Color.from_rgb(255, 102, 0)  # CS2 Orange
     )
 
-    # Add rules in chunks to avoid exceeding field value limit
-    rules_chunks = []
-    current_chunk = ""
+    # Add rules with numbers
+    rules_text = ""
     for i, rule in enumerate(RULES, 1):
-        rule_line = f"**{i}.** {rule}\n\n"
-        if len(current_chunk) + len(rule_line) > 1024:
-            rules_chunks.append(current_chunk)
-            current_chunk = ""
-        current_chunk += rule_line
+        rules_text += f"**{i}.** {rule}\n\n"
 
-    if current_chunk:
-        rules_chunks.append(current_chunk)
+    embed.add_field(
+        name="⚠️ חוקי השרת",
+        value=rules_text,
+        inline=False
+    )
 
-    for i, chunk in enumerate(rules_chunks):
-        embed.add_field(
-            name=f"⚠️ חוקי השרת (חלק {i + 1})" if len(rules_chunks) > 1 else "⚠️ חוקי השרת",
-            value=chunk,
-            inline=False
-        )
-
+    embed.set_footer(
+        text="CS2IL Community • נוצר ב-2025",
+        icon_url=interaction.guild.icon.url if interaction.guild.icon else None
+    )
 
     embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
 
@@ -158,7 +148,6 @@ async def rules(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="roles", description="בחר רולים לעדכונים")
-@is_allowed_user()
 async def roles(interaction: discord.Interaction):
     """Display role selection menu"""
 
@@ -167,7 +156,8 @@ async def roles(interaction: discord.Interaction):
         description=(
             "**בחר את הרולים שאתה רוצה לקבל:**\n\n"
             "🖥️ **עדכוני שרת** - עדכונים על השרתים שלנו\n"
-            "🎮 **עדכוני סיאס** - עדכונים על Counter-Strike 2\n\n"
+            "🎮 **עדכוני סיאס** - עדכונים על Counter-Strike 2\n"
+            "🎁 **הגרלה** - התראות על הגרלות\n\n"
             "*השתמש בתפריט למטה כדי לבחור*\n"
             "*לחץ שוב על רול כדי להסיר אותו*"
         ),
@@ -181,7 +171,7 @@ async def roles(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="setup_rules", description="[ADMIN] הגדר הודעת חוקים קבועה בערוץ")
-@is_allowed_user()
+@commands.has_permissions(administrator=True)
 async def setup_rules(interaction: discord.Interaction, channel: discord.TextChannel = None):
     """Setup permanent rules message in a channel"""
 
@@ -198,24 +188,15 @@ async def setup_rules(interaction: discord.Interaction, channel: discord.TextCha
         color=discord.Color.from_rgb(255, 102, 0)
     )
 
-    rules_chunks = []
-    current_chunk = ""
+    rules_text = ""
     for i, rule in enumerate(RULES, 1):
-        rule_line = f"**{i}.** {rule}\n\n"
-        if len(current_chunk) + len(rule_line) > 1024:
-            rules_chunks.append(current_chunk)
-            current_chunk = ""
-        current_chunk += rule_line
+        rules_text += f"**{i}.** {rule}\n\n"
 
-    if current_chunk:
-        rules_chunks.append(current_chunk)
-
-    for i, chunk in enumerate(rules_chunks):
-        embed.add_field(
-            name=f"⚠️ חוקי השרת (חלק {i + 1})" if len(rules_chunks) > 1 else "⚠️ חוקי השרת",
-            value=chunk,
-            inline=False
-        )
+    embed.add_field(
+        name="⚠️ חוקי השרת",
+        value=rules_text,
+        inline=False
+    )
 
     embed.add_field(
         name="📌 חשוב לזכור",
@@ -228,6 +209,10 @@ async def setup_rules(interaction: discord.Interaction, channel: discord.TextCha
         inline=False
     )
 
+    embed.set_footer(
+        text="CS2IL Community • נוצר ב-2025",
+        icon_url=interaction.guild.icon.url if interaction.guild.icon else None
+    )
 
     if interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
@@ -240,7 +225,7 @@ async def setup_rules(interaction: discord.Interaction, channel: discord.TextCha
 
 
 @bot.tree.command(name="setup_roles", description="[ADMIN] הגדר הודעת בחירת רולים קבועה")
-@is_allowed_user()
+@commands.has_permissions(administrator=True)
 async def setup_roles_permanent(interaction: discord.Interaction, channel: discord.TextChannel = None):
     """Setup permanent role selection message"""
 
@@ -253,7 +238,8 @@ async def setup_roles_permanent(interaction: discord.Interaction, channel: disco
             "**קבל עדכונים על מה שמעניין אותך!**\n\n"
             "השתמש בתפריט למטה כדי לבחור את הרולים שאתה רוצה:\n\n"
             "🖥️ **עדכוני שרת** - עדכונים על השרתים שלנו\n"
-            "🎮 **עדכוני סיאס** - עדכונים על Counter-Strike 2\n\n"
+            "🎮 **עדכוני סיאס** - עדכונים על Counter-Strike 2\n"
+            "🎁 **הגרלה** - התראות על הגרלות\n\n"
             "*ניתן לשנות את הבחירה שלך בכל עת!*\n"
             "*לחץ שוב על רול כדי להסיר אותו*"
         ),
@@ -297,6 +283,16 @@ async def on_member_join(member):
         embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
         await welcome_channel.send(embed=embed)
 
+
+# Error handling
+@setup_rules.error
+@setup_roles_permanent.error
+async def permission_error(interaction: discord.Interaction, error):
+    if isinstance(error, commands.MissingPermissions):
+        await interaction.response.send_message(
+            "❌ אין לך הרשאות להשתמש בפקודה זו (דרוש Administrator)",
+            ephemeral=True
+        )
 
 
 # Run the bot
