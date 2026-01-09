@@ -34,7 +34,7 @@ RULES = [
 RULES_TITLE = "ברוכים הבאים לשרת סיאס הגדול בישראל"
 
 # Instagram settings
-INSTAGRAM_USERNAME = "cs2israel"  # CS2IL Instagram account
+INSTAGRAM_USERNAME = "baror.sigma"  # CS2IL Instagram account
 INSTAGRAM_CHECK_CHANNEL_ID = 1458113065634762907  # Social media updates channel
 last_post_id = None  # Track the last post we've seen
 
@@ -61,12 +61,6 @@ class RoleSelect(Select):
                 description="קבל התראות על עדכונים של CS2",
                 emoji="🎮",
                 value="1446503623021559909"
-            ),
-            discord.SelectOption(
-                label="הגרלה",
-                description="קבל התראות על הגרלות",
-                emoji="🎁",
-                value="1453758256580263986"
             )
         ]
 
@@ -137,10 +131,7 @@ async def rules(interaction: discord.Interaction):
         inline=False
     )
 
-    embed.set_footer(
-        text="CS2IL Community • נוצר ב-2025",
-        icon_url=interaction.guild.icon.url if interaction.guild.icon else None
-    )
+
 
     embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
 
@@ -208,10 +199,6 @@ async def setup_rules(interaction: discord.Interaction, channel: discord.TextCha
         inline=False
     )
 
-    embed.set_footer(
-        text="CS2IL Community • נוצר ב-2025",
-        icon_url=interaction.guild.icon.url if interaction.guild.icon else None
-    )
 
     if interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
